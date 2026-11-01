@@ -1,0 +1,1489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Work Mileage Log</title>
+<meta name="description" content="Log work days, hours and the route driven; totals kilometres and kilometres × rate per month.">
+<meta name="theme-color" content="#1B4E92">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mileage Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;800&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a driver's logbook. Distance search and entry form on top, the month's ledger below, odometer-style totals at the foot. */
+:root{
+  --paper:#F2F4F8; --surface:#FFFFFF; --ink:#152030; --muted:#5A6578; --faint:#8A94A4;
+  --line:#DAE0E8; --line-strong:#B8C1CD;
+  --sign:#1B4E92; --sign-soft:#E6EDF8; --on-sign:#FFFFFF;
+  --odo-bg:#1B2330; --odo-cell:#283242; --odo-fg:#F1F3F6; --odo-tenth:#C4372B;
+  --warn:#8F5600; --warn-soft:#FFF2D9; --danger:#B42318; --ok:#2F7A4A;
+  --fewo-bg:#FCE4EE; --fewo-dot:#E59BBB; --client-bg:#FFF4B8; --client-dot:#E5C443;
+  --font-ui:"Overpass","Segoe UI",system-ui,-apple-system,sans-serif;
+  --font-num:"Overpass Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --r:7px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E131A; --surface:#161D27; --ink:#E4E9F0; --muted:#9AA5B5; --faint:#6E7A8B;
+    --line:#26303D; --line-strong:#3A4656;
+    --sign:#7CA8E8; --sign-soft:#1A283C; --on-sign:#0E131A;
+    --odo-bg:#090D12; --odo-cell:#18202B; --odo-fg:#EEF1F5; --odo-tenth:#D9483C;
+    --warn:#F0B460; --warn-soft:#33270F; --danger:#F2826F; --ok:#6BC28B;
+    --fewo-bg:#4D2536; --fewo-dot:#D98AAC; --client-bg:#4A3E12; --client-dot:#DDBB45;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E131A; --surface:#161D27; --ink:#E4E9F0; --muted:#9AA5B5; --faint:#6E7A8B;
+  --line:#26303D; --line-strong:#3A4656;
+  --sign:#7CA8E8; --sign-soft:#1A283C; --on-sign:#0E131A;
+  --odo-bg:#090D12; --odo-cell:#18202B; --odo-fg:#EEF1F5; --odo-tenth:#D9483C;
+  --warn:#F0B460; --warn-soft:#33270F; --danger:#F2826F; --ok:#6BC28B;
+    --fewo-bg:#4D2536; --fewo-dot:#D98AAC; --client-bg:#4A3E12; --client-dot:#DDBB45;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{color-scheme:light; -webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top, 0px); padding-bottom:env(safe-area-inset-bottom, 0px)}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--font-ui); font-size:15px; line-height:1.5; margin:0;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:24px 64px;
+}
+.wrap{width:100%; max-width:1920px; margin:0 auto; display:flex; flex-direction:column; gap:20px}
+h1,h2,h3{margin:0; text-wrap:balance; line-height:1.2}
+h1{font-size:30px; font-weight:800; letter-spacing:-.01em}
+h2{font-size:18px; font-weight:700}
+h3{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+p{margin:0}
+.hint{color:var(--muted); font-size:13px}
+.faint{color:var(--faint)}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+:focus-visible{outline:2px solid var(--sign); outline-offset:2px}
+
+/* Header */
+.top{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px}
+.brand{display:flex; flex-direction:column; gap:4px}
+.brand .sub{color:var(--muted)}
+.top-right{display:flex; flex-wrap:wrap; align-items:center; gap:12px}
+.lang{display:flex; align-items:center; gap:6px; color:var(--muted)}
+.lang svg{width:18px; height:18px; flex:none}
+.lang select{width:auto; min-height:36px; padding:4px 8px; font-weight:600}
+.month-nav{display:flex; align-items:center; gap:6px}
+.month-nav .label{min-width:160px; text-align:center; font-weight:700; font-size:17px}
+.status{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
+.status .dot{width:8px; height:8px; border-radius:50%; background:var(--faint); flex:none}
+.status.is-db .dot{background:var(--ok)}
+.status.is-memory .dot{background:var(--danger)}
+.status .note{color:var(--warn)}
+.status-row{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px}
+.backup{display:flex; gap:8px; flex-wrap:wrap}
+
+/* Tabs */
+.tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); overflow-x:auto}
+.tab{appearance:none; background:none; border:0; border-bottom:2px solid transparent; margin-bottom:-1px;
+  padding:10px 14px; font:inherit; font-weight:700; color:var(--muted); cursor:pointer; white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--sign)}
+
+/* Controls */
+.btn{appearance:none; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  min-height:38px; padding:0 14px; border-radius:var(--r); font:inherit; font-weight:700; font-size:14px;
+  cursor:pointer; border:1px solid transparent; text-decoration:none; white-space:nowrap}
+.btn.primary{background:var(--sign); color:var(--on-sign)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.primary:disabled{opacity:.6; cursor:progress}
+.btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-strong)}
+.btn.ghost:hover{background:var(--sign-soft)}
+.btn.sm{min-height:32px; padding:0 10px; font-size:13px}
+.btn.danger{color:var(--danger)}
+.btn.armed{background:var(--danger); color:var(--surface); border-color:var(--danger)}
+.icon-btn{appearance:none; width:32px; height:32px; flex:none; border-radius:var(--r); border:1px solid transparent;
+  background:transparent; color:var(--muted); font-size:20px; line-height:1; cursor:pointer}
+.icon-btn:hover{border-color:var(--line-strong); color:var(--danger)}
+.nav-btn{appearance:none; width:36px; height:36px; border-radius:var(--r); border:1px solid var(--line-strong);
+  background:var(--surface); color:var(--ink); font-size:18px; cursor:pointer}
+.nav-btn:hover{background:var(--sign-soft)}
+.linklike{appearance:none; background:none; border:0; padding:0; font:inherit; color:var(--sign); font-weight:700; text-decoration:underline; cursor:pointer}
+
+input[type=text],input[type=search],input[type=date],input[type=time],input[type=number],select,textarea{
+  font:inherit; color:var(--ink); background:var(--surface); border:1px solid var(--line-strong);
+  border-radius:var(--r); min-height:38px; padding:6px 10px; width:100%; min-width:0}
+input[type=search]::-webkit-search-cancel-button{display:none}
+input[type=time],input[type=number],input[inputmode=decimal],select.time-select{font-family:var(--font-num); font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--sign); outline-offset:0; border-color:var(--sign)}
+.field{display:flex; flex-direction:column; gap:4px; min-width:0}
+.field > span:first-child, .field > label:first-child{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted)}
+.suffix{display:flex; align-items:center; gap:6px}
+.suffix em{font-style:normal; color:var(--muted); font-size:13px; white-space:nowrap}
+
+/* Segmented switch */
+.steps{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.steps-label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted)}
+.seg{display:inline-flex; border:1px solid var(--line-strong); border-radius:var(--r); overflow:hidden; max-width:100%; flex-wrap:wrap}
+.seg button{appearance:none; border:0; background:transparent; color:var(--ink); font:inherit; font-size:13px; font-weight:700; padding:7px 12px; cursor:pointer; white-space:nowrap}
+.seg button + button{border-left:1px solid var(--line-strong)}
+.seg button:hover{background:var(--sign-soft)}
+.seg button[aria-checked="true"]{background:var(--sign); color:var(--on-sign)}
+
+/* Search */
+.search{position:relative; display:flex; align-items:center; min-width:0}
+.search > svg{position:absolute; left:11px; width:16px; height:16px; color:var(--muted); pointer-events:none}
+.search input{padding-left:34px; padding-right:38px}
+.search .icon-btn{position:absolute; right:3px}
+.search-row{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px}
+.search-row h2{flex:none}
+.search-row .search{flex:1 1 280px}
+.results{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(min(360px, 100%), 1fr)); column-gap:28px; border-top:1px solid var(--line)}
+.results li{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 12px; padding:9px 0; border-bottom:1px solid var(--line)}
+.results .pair{font-weight:700; min-width:0; overflow-wrap:anywhere; flex:1 1 200px}
+.results .meta{display:flex; align-items:baseline; gap:12px}
+
+/* Cards */
+.card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:20px; display:flex; flex-direction:column; gap:18px; min-width:0}
+.card-head{display:flex; flex-direction:column; gap:4px}
+.form-head{display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:12px}
+.banner{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;
+  background:var(--warn-soft); color:var(--ink); border:1px solid var(--warn); border-radius:10px; padding:12px 16px; font-size:14px}
+.banner strong{color:var(--warn)}
+.chip{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--warn); border:1px solid var(--warn); border-radius:4px; padding:3px 5px; margin-left:6px; line-height:1; text-box:trim-both cap alphabetic; font-family:var(--font-ui)}
+.badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--on-sign); background:var(--sign); border-radius:4px; padding:4px 6px; margin-left:6px; line-height:1; text-box:trim-both cap alphabetic}
+
+/* Entry form */
+.fields{display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px}
+.readout output{display:flex; align-items:center; min-height:38px; font-family:var(--font-num); font-size:22px; font-weight:600; color:var(--sign)}
+.route-block{display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--line); padding-top:16px}
+.route-head{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px}
+.route-total{font-size:14px; color:var(--muted)}
+.route-total b{font-family:var(--font-num); color:var(--ink)}
+.route-total .warn{color:var(--warn); font-weight:700}
+.route{list-style:none; margin:0; padding:0; display:flex; flex-direction:column}
+.stop{display:flex; align-items:center; gap:10px}
+.stop select{max-width:360px}
+.pin{width:14px; height:14px; border-radius:50%; border:3px solid var(--sign); background:var(--surface); flex:none}
+.pin.first{background:var(--sign)}
+.leg{display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; min-height:36px; padding-left:6px}
+.leg-line{width:2px; align-self:stretch; min-height:36px; margin-right:12px;
+  background:repeating-linear-gradient(to bottom, var(--line-strong) 0 5px, transparent 5px 9px)}
+.leg-km{font-family:var(--font-num); font-size:13px; color:var(--muted)}
+.leg.missing .leg-line{background:repeating-linear-gradient(to bottom, var(--warn) 0 5px, transparent 5px 9px)}
+.leg-input{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--warn); font-weight:700}
+.leg-input input{width:84px; min-height:32px; padding:4px 8px; border-color:var(--warn)}
+.maps-link{font-size:13px; color:var(--sign); font-weight:700; white-space:nowrap}
+.route-empty{color:var(--muted); font-size:14px; padding:4px 0}
+.route-add{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.route-add select{width:auto; min-width:180px; max-width:100%}
+.form-actions{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+
+/* Ledger */
+.ledger{display:flex; flex-direction:column; gap:12px; min-width:0}
+.ledger-head{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px}
+.ledger-head .actions{display:flex; gap:8px; flex-wrap:wrap}
+.table-scroll{overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:10px}
+table{width:100%; border-collapse:collapse; min-width:720px}
+th,td{padding:10px 12px; text-align:left; vertical-align:top}
+thead th{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+  border-bottom:1px solid var(--line-strong); white-space:nowrap; background:var(--surface)}
+tbody td{border-bottom:1px solid var(--line)}
+tbody tr.day{cursor:pointer}
+tbody tr.day:hover td{background:var(--sign-soft)}
+tbody tr.is-editing td{background:var(--sign-soft)}
+td.n, th.n{text-align:right; font-family:var(--font-num); font-variant-numeric:tabular-nums; white-space:nowrap}
+td.strong{font-weight:600}
+td.route-cell{color:var(--muted); font-size:14px; min-width:220px}
+.row-btn{appearance:none; background:none; border:0; padding:0; font:inherit; font-weight:700; color:var(--ink); cursor:pointer; white-space:nowrap; text-align:left}
+.row-btn:hover{color:var(--sign)}
+.km-warn{color:var(--warn); font-weight:700}
+tfoot th, tfoot td{border-top:2px solid var(--ink); font-weight:700; padding-top:12px; padding-bottom:12px}
+tfoot td.n{font-size:16px}
+.empty-cell{padding:28px 16px; text-align:center; color:var(--muted)}
+#copyArea{font-family:var(--font-num); font-size:12px; min-height:120px}
+
+/* Totals */
+.totals{display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.tot{background:var(--surface); padding:18px 20px; display:flex; flex-direction:column; gap:8px; min-width:0}
+.tot-label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+.tot-hours{font-family:var(--font-num); font-size:30px; font-weight:600; line-height:1.2}
+.tot-amount{font-family:var(--font-num); font-size:34px; font-weight:600; line-height:1.2; color:var(--sign)}
+.tot-sub{font-size:13px; color:var(--muted)}
+.tot-sub.warn{color:var(--warn); font-weight:700}
+.odo{display:inline-flex; align-items:stretch; gap:3px; padding:6px; background:var(--odo-bg); border-radius:7px; align-self:flex-start; max-width:100%}
+.odo .d{font-family:var(--font-num); font-size:28px; font-weight:600; width:1.1em; text-align:center; line-height:1.45;
+  color:var(--odo-fg); background:var(--odo-cell); border-radius:3px;
+  box-shadow:inset 0 7px 7px -6px rgba(0,0,0,.65), inset 0 -7px 7px -6px rgba(0,0,0,.65)}
+.odo .d.tenth{background:var(--odo-tenth)}
+.odo .sep{color:var(--odo-fg); font-family:var(--font-num); font-size:24px; align-self:flex-end; line-height:1.3; margin:0 -1px}
+.odo .unit{color:var(--odo-fg); font-size:12px; font-weight:700; letter-spacing:.1em; align-self:center; padding:0 6px 0 5px; text-transform:uppercase}
+
+/* Places & distances views */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px; align-items:start}
+.rows{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; border-top:1px solid var(--line)}
+.rows.grid-rows{display:grid; grid-template-columns:repeat(auto-fill, minmax(min(460px, 100%), 1fr)); column-gap:28px}
+.rows > li{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; padding:12px 0; border-bottom:1px solid var(--line)}
+.row-main{display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 180px}
+.row-title{font-weight:700; overflow-wrap:anywhere}
+.row-sub{font-size:13px; color:var(--muted); overflow-wrap:anywhere}
+.row-km{font-family:var(--font-num); font-weight:600; white-space:nowrap}
+.row-actions{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.rows > li.empty-row{color:var(--muted); font-size:14px; justify-content:flex-start; grid-column:1 / -1}
+.subform{display:flex; flex-direction:column; gap:12px; background:var(--paper); border-radius:8px; padding:16px}
+.rate-card{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between}
+.rate-card .rate{width:180px}
+.home-row{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px}
+.home-fields{display:flex; flex-wrap:wrap; gap:12px}
+.home-fields .field{flex:1 1 140px}
+.home-fields .field.addr{flex:3 1 240px}
+.group-panel{gap:14px}
+.group-title{display:flex; align-items:center; gap:10px}
+.group-title::before{content:""; width:10px; height:10px; border-radius:50%; background:var(--sign); flex:none}
+.group-panel[data-group="fewo"] .group-title::before{background:var(--fewo-dot)}
+.group-panel[data-group="private"] .group-title::before{background:var(--client-dot)}
+.count{font-family:var(--font-num); font-size:14px; font-weight:600; color:var(--muted)}
+/* Highlights: trimmed to the letters' cap height and baseline so the text sits in the middle of the box */
+.fw,.pc{display:inline-block; color:var(--ink); line-height:1; padding:4px 7px; border-radius:5px; max-width:100%;
+  text-box:trim-both cap alphabetic}
+.fw{background:var(--fewo-bg)}
+.pc{background:var(--client-bg)}
+.dist-tools{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px}
+.dist-tools .search{flex:1 1 280px}
+
+/* Toast */
+.toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom, 0px)); transform:translate(-50%, 16px);
+  max-width:min(520px, calc(100vw - 32px)); background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:8px;
+  font-size:14px; font-weight:600; opacity:0; visibility:hidden; transition:opacity .18s, transform .18s, visibility .18s; z-index:20}
+.toast.show{opacity:1; visibility:visible; transform:translate(-50%, 0)}
+.toast.error{background:var(--danger); color:var(--surface)}
+
+@media (max-width: 760px){
+  .totals{grid-template-columns:1fr}
+  h1{font-size:26px}
+  .card{padding:16px}
+  .month-nav .label{min-width:130px}
+}
+@media (prefers-reduced-motion: reduce){ .toast{transition:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1 data-i18n="app_h1">Work Mileage Log</h1>
+      <p class="sub" data-i18n="app_sub">Your work days, hours and kilometres, month by month.</p>
+    </div>
+    <div class="top-right">
+      <label class="lang">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
+        <span class="sr" data-i18n="lang">Language</span>
+        <select id="langSelect">
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+          <option value="pl">Polski</option>
+        </select>
+      </label>
+      <div class="month-nav">
+        <button type="button" class="nav-btn" id="prevMonth" data-i18n-aria="prev_month" aria-label="Previous month">‹</button>
+        <span class="label" id="monthLabel" aria-live="polite"></span>
+        <button type="button" class="nav-btn" id="nextMonth" data-i18n-aria="next_month" aria-label="Next month">›</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="status-row">
+    <div id="status" class="status"><span class="dot"></span><span id="statusText"></span></div>
+    <div class="backup">
+      <button type="button" class="btn ghost sm" id="exportBtn" data-i18n="bk_export">Export backup</button>
+      <button type="button" class="btn ghost sm" id="importBtn" data-i18n="bk_import">Import backup</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab" role="tab" id="tab-log" aria-controls="view-log" aria-selected="true" data-i18n="tab_log">Logbook</button>
+    <button type="button" class="tab" role="tab" id="tab-places" aria-controls="view-places" aria-selected="false" data-i18n="tab_places">Places</button>
+    <button type="button" class="tab" role="tab" id="tab-dist" aria-controls="view-dist" aria-selected="false" data-i18n="tab_dist">Distances</button>
+  </nav>
+
+  <div id="exampleBanner" class="banner" hidden>
+    <span><strong data-i18n="ex_strong">Example entries.</strong> <span data-i18n="ex_text"></span></span>
+    <button type="button" class="btn ghost sm" id="removeExamples" data-i18n="ex_remove">Remove examples</button>
+  </div>
+
+  <!-- LOGBOOK -->
+  <section id="view-log" role="tabpanel" aria-labelledby="tab-log" class="wrap" style="gap:20px">
+    <div class="card">
+      <div class="search-row">
+        <h2 id="logSearchTitle" data-i18n="search_title">Find a distance</h2>
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="logSearch" autocomplete="off" aria-labelledby="logSearchTitle" data-i18n-ph="search_ph">
+          <button type="button" class="icon-btn" id="logSearchClear" data-i18n-aria="search_clear" hidden>×</button>
+        </div>
+      </div>
+      <ul id="logResults" class="results" hidden></ul>
+      <p id="logSearchMsg" class="hint" hidden></p>
+    </div>
+
+    <form id="dayForm" class="card" autocomplete="off" novalidate>
+      <div class="form-head">
+        <div class="card-head">
+          <h2 id="formTitle"></h2>
+          <p id="formHint" class="hint"></p>
+        </div>
+        <div class="steps">
+          <span class="steps-label" id="stepsLabel" data-i18n="time_steps">Time steps</span>
+          <div class="seg" role="radiogroup" aria-labelledby="stepsLabel">
+            <button type="button" role="radio" data-step="15" data-i18n="step_15">15 min</button>
+            <button type="button" role="radio" data-step="1" data-i18n="step_1">1 min</button>
+          </div>
+        </div>
+      </div>
+      <div class="fields">
+        <div class="field"><label for="f-date" data-i18n="f_date">Date</label><input type="date" id="f-date" required></div>
+        <div class="field"><span id="lbl-start" data-i18n="f_start">Start</span>
+          <input type="time" id="f-start" step="60" aria-labelledby="lbl-start">
+          <select id="f-start-q" class="time-select" aria-labelledby="lbl-start" hidden></select>
+        </div>
+        <div class="field"><span id="lbl-break" data-i18n="f_break">Break</span>
+          <span class="suffix">
+            <input type="number" id="f-break" min="0" step="1" inputmode="numeric" aria-labelledby="lbl-break">
+            <select id="f-break-q" class="time-select" aria-labelledby="lbl-break" hidden></select>
+            <em data-i18n="f_min">min</em>
+          </span>
+        </div>
+        <div class="field"><span id="lbl-end" data-i18n="f_end">End</span>
+          <input type="time" id="f-end" step="60" aria-labelledby="lbl-end">
+          <select id="f-end-q" class="time-select" aria-labelledby="lbl-end" hidden></select>
+        </div>
+        <div class="field readout"><span data-i18n="f_total">Total hours</span><output id="f-total">0:00 h</output></div>
+      </div>
+      <div class="route-block">
+        <div class="route-head"><h3 data-i18n="r_title">Route driven</h3><span id="routeTotal" class="route-total"></span></div>
+        <ol id="routeList" class="route"></ol>
+        <div id="routeAdd" class="route-add">
+          <select id="addStop" aria-label="+"></select>
+          <button type="button" class="btn ghost sm" id="addHome" data-i18n="r_back_home">+ Back home</button>
+          <button type="button" class="btn ghost sm" id="clearRoute" data-i18n="r_clear">Clear route</button>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary" id="saveDay"></button>
+        <button type="button" class="btn ghost" id="cancelEdit" data-i18n="b_cancel" hidden>Cancel</button>
+        <button type="button" class="btn ghost danger" id="deleteDay" data-i18n="b_delete_day" hidden>Delete day</button>
+      </div>
+    </form>
+
+    <div class="ledger">
+      <div class="ledger-head">
+        <h2 id="ledgerTitle"></h2>
+        <div class="actions">
+          <button type="button" class="btn ghost sm" id="copyBtn" data-i18n="l_copy">Copy for Excel</button>
+          <button type="button" class="btn ghost sm" id="csvBtn" data-i18n="l_csv">Download CSV</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col" data-i18n="th_date">Date</th><th scope="col" class="n" data-i18n="th_start">Start</th><th scope="col" class="n" data-i18n="th_break">Break</th><th scope="col" class="n" data-i18n="th_end">End</th><th scope="col" class="n" data-i18n="th_total">Total hours</th><th scope="col" data-i18n="th_route">Route</th><th scope="col" class="n" data-i18n="th_km">km</th></tr>
+          </thead>
+          <tbody id="ledgerBody"></tbody>
+          <tfoot id="ledgerFoot"></tfoot>
+        </table>
+      </div>
+      <textarea id="copyArea" readonly hidden aria-label="CSV"></textarea>
+    </div>
+
+    <section class="totals" aria-labelledby="totalsTitle">
+      <h2 id="totalsTitle" class="sr" data-i18n="t_km">Totals</h2>
+      <div class="tot">
+        <span class="tot-label" data-i18n="t_hours">Total hours</span>
+        <span class="tot-hours" id="totHours">0:00 h</span>
+        <span class="tot-sub" id="totDays"></span>
+      </div>
+      <div class="tot">
+        <span class="tot-label" data-i18n="t_km">Total kilometres</span>
+        <div class="odo" id="odo" role="img" aria-label="0,0 km"></div>
+      </div>
+      <div class="tot">
+        <span class="tot-label" id="calcLabel"></span>
+        <span class="tot-amount" id="amount">0,00 €</span>
+        <span class="tot-sub warn" id="totMissing" hidden></span>
+      </div>
+    </section>
+  </section>
+
+  <!-- PLACES -->
+  <section id="view-places" role="tabpanel" aria-labelledby="tab-places" class="wrap" style="gap:20px" hidden>
+    <div class="card home-card">
+      <div id="homeView" class="home-row"></div>
+      <form id="homeForm" class="subform" autocomplete="off" novalidate hidden>
+        <h3 data-i18n="h_form_title">Your home</h3>
+        <div class="home-fields">
+          <label class="field"><span data-i18n="p_name">Name</span><input id="h-name" type="text"></label>
+          <label class="field addr"><span data-i18n="p_address">Address</span><input id="h-address" type="text" data-i18n-ph="p_address_ph"></label>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" type="submit" data-i18n="h_save">Save home</button>
+          <button type="button" class="btn ghost" id="cancelHome" data-i18n="b_cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <div class="grid2">
+      <div class="card group-panel" data-group="fewo">
+        <div class="card-head"><h2 class="group-title"><span data-i18n="grp_fewo">Ferienwohnungen</span> <span class="count" id="count-fewo"></span></h2><p class="hint" data-i18n="hint_fewo"></p></div>
+        <ul id="placeList-fewo" class="rows"></ul>
+        <form id="placeForm-fewo" class="subform" autocomplete="off" novalidate>
+          <h3 id="placeFormTitle-fewo"></h3>
+          <label class="field"><span data-i18n="p_name">Name</span><input id="p-name-fewo" type="text" data-i18n-ph="ph_fewo"></label>
+          <label class="field"><span data-i18n="p_address">Address</span><input id="p-address-fewo" type="text" data-i18n-ph="p_address_ph"></label>
+          <div class="form-actions">
+            <button class="btn primary" type="submit" id="savePlace-fewo"></button>
+            <button type="button" class="btn ghost" id="cancelPlace-fewo" data-i18n="b_cancel" hidden>Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="card group-panel" data-group="private">
+        <div class="card-head"><h2 class="group-title"><span data-i18n="grp_private">Private clients</span> <span class="count" id="count-private"></span></h2><p class="hint" data-i18n="hint_private"></p></div>
+        <ul id="placeList-private" class="rows"></ul>
+        <form id="placeForm-private" class="subform" autocomplete="off" novalidate>
+          <h3 id="placeFormTitle-private"></h3>
+          <label class="field"><span data-i18n="p_name">Name</span><input id="p-name-private" type="text" data-i18n-ph="ph_private"></label>
+          <label class="field"><span data-i18n="p_address">Address</span><input id="p-address-private" type="text" data-i18n-ph="p_address_ph"></label>
+          <div class="form-actions">
+            <button class="btn primary" type="submit" id="savePlace-private"></button>
+            <button type="button" class="btn ghost" id="cancelPlace-private" data-i18n="b_cancel" hidden>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISTANCES -->
+  <section id="view-dist" role="tabpanel" aria-labelledby="tab-dist" class="wrap" style="gap:20px" hidden>
+    <div class="card" id="distFormCard">
+      <div class="card-head"><h2 data-i18n="d_add_title">Add or change a distance</h2><p class="hint" data-i18n="d_hint"></p></div>
+      <form id="distForm" class="subform" autocomplete="off" novalidate>
+        <div class="fields">
+          <label class="field"><span data-i18n="d_from">From</span><select id="d-from"></select></label>
+          <label class="field"><span data-i18n="d_to">To</span><select id="d-to"></select></label>
+          <label class="field"><span data-i18n="d_km">Kilometres</span><input id="d-km" type="text" inputmode="decimal" placeholder="0,0"></label>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" type="submit" data-i18n="d_save">Save distance</button>
+          <a id="d-maps" class="maps-link" href="https://www.google.com/maps" target="_blank" rel="noopener" data-i18n="d_check_route" hidden>Check this route in Google Maps ↗</a>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2 class="group-title" style="gap:8px"><span id="distAllTitle" data-i18n="d_all_title">All distances</span> <span class="count" id="count-dist"></span></h2>
+      <div class="dist-tools">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="distSearch" autocomplete="off" aria-labelledby="distAllTitle" data-i18n-ph="search_ph">
+          <button type="button" class="icon-btn" id="distSearchClear" data-i18n-aria="search_clear" hidden>×</button>
+        </div>
+        <div class="seg" role="radiogroup" id="distGroup" data-i18n-aria="f_show">
+          <button type="button" role="radio" data-group="all" data-i18n="f_all">All</button>
+          <button type="button" role="radio" data-group="fewo" data-i18n="grp_fewo">Ferienwohnungen</button>
+          <button type="button" role="radio" data-group="private" data-i18n="grp_private">Private clients</button>
+        </div>
+      </div>
+      <ul id="distList" class="rows grid-rows"></ul>
+    </div>
+    <div class="card rate-card">
+      <div class="card-head"><h2 data-i18n="rate_title">Rate per kilometre</h2><p class="hint" data-i18n="rate_hint"></p></div>
+      <label class="field rate"><span class="sr" data-i18n="rate_aria">Rate in euro per kilometre</span><span class="suffix"><input id="rate" type="text" inputmode="decimal"><em data-i18n="rate_unit">€ per km</em></span></label>
+    </div>
+  </section>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+
+  /* ---------- languages ---------- */
+  const LANGS = { en: 'en-GB', de: 'de-DE', pl: 'pl-PL' };
+  const LS_LANG = 'work-mileage-log-lang';
+  const LS_STEP = 'work-mileage-log-step';
+  const STR = {
+    en: {
+      app_h1: 'Work Mileage Log', app_sub: 'Your work days, hours and kilometres, month by month.', lang: 'Language',
+      prev_month: 'Previous month', next_month: 'Next month',
+      st_connecting: 'Connecting to your saved log…',
+      st_db: 'Saved to your Claude account. Open this page on any device to see the same log.',
+      st_local: 'Saved on this device only. Use Export backup to keep a copy or move your data to another device.',
+      bk_export: 'Export backup', bk_import: 'Import backup', m_exported: 'Backup saved.',
+      m_imported: 'Backup imported: {places} places, {dist} distances, {days} days.', e_import: 'This file isn’t a Work Mileage Log backup.',
+      st_memory: 'Not saved: this browser blocks storage, so entries disappear when you close the page.',
+      note_unreachable: 'Your saved data can’t be reached yet, so this may be incomplete.',
+      note_lost: 'The connection to your saved data was lost. Reload the page to reconnect.',
+      tab_log: 'Logbook', tab_places: 'Places', tab_dist: 'Distances',
+      ex_strong: 'Example entries.', ex_text: 'The places, distances and days marked “Example” are there to show how the log works.',
+      ex_remove: 'Remove examples', ex_confirm: 'Click again to remove',
+      search_title: 'Find a distance', search_ph: 'Search by place name, address or town', search_clear: 'Clear search',
+      search_none: 'No distances found for “{q}”.', search_more: 'Showing {shown} of {total}. Type more to narrow it down.',
+      f_title_new: 'Log a day', f_title_edit: 'Edit {day}',
+      f_hint_copied: 'Times and route copied from {day}. Change anything that was different.',
+      f_hint_start: 'Enter your times, then add each place you drove to in order.',
+      f_hint_example: 'This is an example entry. Saving it turns it into one of your own.',
+      time_steps: 'Time steps', step_15: '15 min', step_1: '1 min',
+      f_date: 'Date', f_start: 'Start', f_break: 'Break', f_end: 'End', f_total: 'Total hours', f_min: 'min',
+      r_title: 'Route driven', r_add_stop: '+ Add stop…', r_back_home: '+ Back home', r_clear: 'Clear route',
+      r_noplaces_a: 'Add your places first (home and each place you work at) under', r_noplaces_b: '.',
+      r_empty: 'No driving this day. Add the first stop below.', r_this_day: 'This day:',
+      r_missing: { one: '{n} distance missing', other: '{n} distances missing' },
+      r_check_maps: 'Check in Maps ↗', r_removed_place: 'Removed place', r_stop: 'Stop {n}', r_remove_stop: 'Remove stop {n}',
+      r_leg_label: 'Kilometres from {a} to {b}',
+      b_save_day: 'Save day', b_save_changes: 'Save changes', b_cancel: 'Cancel', b_delete_day: 'Delete day', b_confirm_delete: 'Click again to delete',
+      l_days_in: 'Days in {month}', l_copy: 'Copy for Excel', l_csv: 'Download CSV',
+      th_date: 'Date', th_start: 'Start', th_break: 'Break', th_end: 'End', th_total: 'Total hours', th_route: 'Route', th_km: 'km',
+      l_no_driving: 'No driving', l_empty: 'No days logged in {month} yet. Use the form above to log your first day.',
+      l_month_total: { one: 'Month total · {n} day', other: 'Month total · {n} days' }, chip_example: 'Example',
+      t_hours: 'Total hours', t_days: { one: '{n} day worked', other: '{n} days worked' }, t_km: 'Total kilometres',
+      t_missing: { one: '{n} trip leg has no distance yet and is not counted.', other: '{n} trip legs have no distance yet and are not counted.' },
+      h_none: 'No home set', h_none_sub: 'Add your home address. Your days start and end there.', h_add: 'Add home', h_badge: 'Home',
+      h_no_address: 'No address yet', h_form_title: 'Your home', h_save: 'Save home',
+      p_name: 'Name', p_address: 'Address', p_address_ph: 'Street and number, postcode, town',
+      p_add: 'Add', p_save: 'Save', p_edit: 'Edit', p_delete: 'Delete', p_edit_title: 'Edit {name}', p_no_address: 'No address',
+      grp_fewo: 'Ferienwohnungen', grp_private: 'Private clients',
+      hint_fewo: 'Holiday apartments you drive to.', hint_private: 'Private customers you drive to.',
+      add_fewo: 'Add a Ferienwohnung', add_private: 'Add a private client',
+      ph_fewo: 'e.g. Ferienwohnung am See', ph_private: 'e.g. Familie Schneider',
+      empty_fewo: 'No Ferienwohnungen yet. Add the first one below.', empty_private: 'No private clients yet. Add the first one below.',
+      d_add_title: 'Add or change a distance', d_hint: 'Each distance is entered once, counts in both directions and is reused for every trip.',
+      d_all_title: 'All distances', f_all: 'All', f_show: 'Show',
+      d_from: 'From', d_to: 'To', d_km: 'Kilometres', d_choose: 'Choose…',
+      d_save: 'Save distance', d_check_route: 'Check this route in Google Maps ↗', d_open_maps: 'Open in Maps ↗',
+      d_empty: 'No distances yet. Add one above, or type them straight into the route when you log a day.',
+      rate_title: 'Rate per kilometre', rate_hint: 'Multiplied by the month’s total kilometres at the bottom of the logbook.',
+      rate_unit: '€ per km', rate_aria: 'Rate in euro per kilometre',
+      e_owner: 'Only the owner of this log can change it.',
+      e_full: 'Storage for this log is full. Delete some old entries and try again.',
+      e_too_many: 'Too many changes at once. Wait a moment and try again.',
+      e_save_failed: 'Couldn’t save. Check your connection and try again.',
+      e_connecting: 'Still connecting to your saved log. Try again in a few seconds.',
+      e_num: 'Type the distance as a number, for example 12,5.',
+      m_dist_saved_reuse: 'Saved {a} ↔ {b}: {km}. It will be reused from now on.',
+      e_fill_times: 'Fill in the date, start time and end time.',
+      e_day_exists: '{day} already has an entry. It is now open for editing.',
+      m_day_saved: 'Saved {day}: {h} h, {km}', m_day_deleted: 'Deleted {day}.',
+      m_press_copy: 'Press Ctrl+C (⌘C on a Mac) to copy the selected table.',
+      m_copied: 'Table copied. Paste it into Excel, Numbers or Google Sheets.',
+      m_csv_saved: 'CSV saved.', e_prompt_open: 'A save prompt is already open.',
+      e_cant_save: 'The file can’t be saved here. Use “Copy for Excel” instead.',
+      m_examples_removed: 'Examples removed. Start by adding your home and your work places.',
+      m_home_saved: 'Saved your home address.', e_give_name: 'Give the place a name.',
+      m_saved_name: 'Saved {name}.', m_added_to: 'Added {name} to {group}.',
+      c_used_on: { one: 'Used on {n} day. Delete?', other: 'Used on {n} days. Delete?' }, c_click_again: 'Click again',
+      m_deleted_name: 'Deleted {name}.', e_choose_both: 'Choose both places.', e_choose_diff: 'Choose two different places.',
+      m_dist_saved: 'Saved {a} ↔ {b}: {km}.', e_rate_num: 'Type the rate as a number, for example 0,30.',
+      m_rate_set: 'Rate set to {r} € per km.',
+      x_month_total: 'Month total', x_total_km: 'Total kilometres', x_calc: 'Kilometres × {r} €', x_missing: '(+ missing)'
+    },
+    de: {
+      app_h1: 'Fahrtenbuch & Arbeitszeit', app_sub: 'Deine Arbeitstage, Stunden und Kilometer, Monat für Monat.', lang: 'Sprache',
+      prev_month: 'Vorheriger Monat', next_month: 'Nächster Monat',
+      st_connecting: 'Verbinde mit deinem gespeicherten Fahrtenbuch…',
+      st_db: 'In deinem Claude-Konto gespeichert. Öffne diese Seite auf jedem Gerät, um dasselbe Fahrtenbuch zu sehen.',
+      st_local: 'Nur auf diesem Gerät gespeichert. Mit „Sicherung exportieren“ machst du eine Kopie oder bringst deine Daten auf ein anderes Gerät.',
+      bk_export: 'Sicherung exportieren', bk_import: 'Sicherung importieren', m_exported: 'Sicherung gespeichert.',
+      m_imported: 'Sicherung importiert: {places} Orte, {dist} Entfernungen, {days} Tage.', e_import: 'Diese Datei ist keine Sicherung des Fahrtenbuchs.',
+      st_memory: 'Nicht gespeichert: Dieser Browser blockiert den Speicher, deshalb verschwinden die Einträge beim Schließen der Seite.',
+      note_unreachable: 'Deine gespeicherten Daten sind noch nicht erreichbar, die Anzeige kann unvollständig sein.',
+      note_lost: 'Die Verbindung zu deinen gespeicherten Daten ist abgebrochen. Lade die Seite neu.',
+      tab_log: 'Fahrtenbuch', tab_places: 'Orte', tab_dist: 'Entfernungen',
+      ex_strong: 'Beispieleinträge.', ex_text: 'Die mit „Beispiel“ markierten Orte, Entfernungen und Tage zeigen, wie das Fahrtenbuch funktioniert.',
+      ex_remove: 'Beispiele entfernen', ex_confirm: 'Zum Entfernen erneut klicken',
+      search_title: 'Entfernung suchen', search_ph: 'Nach Ortsname, Adresse oder Stadt suchen', search_clear: 'Suche löschen',
+      search_none: 'Keine Entfernungen für „{q}“ gefunden.', search_more: '{shown} von {total} angezeigt. Tippe weiter, um einzugrenzen.',
+      f_title_new: 'Tag eintragen', f_title_edit: '{day} bearbeiten',
+      f_hint_copied: 'Zeiten und Route von {day} übernommen. Ändere, was anders war.',
+      f_hint_start: 'Trage deine Zeiten ein und füge dann der Reihe nach jeden angefahrenen Ort hinzu.',
+      f_hint_example: 'Das ist ein Beispieleintrag. Beim Speichern wird er zu deinem eigenen.',
+      time_steps: 'Zeitraster', step_15: '15 Min.', step_1: '1 Min.',
+      f_date: 'Datum', f_start: 'Beginn', f_break: 'Pause', f_end: 'Ende', f_total: 'Gesamtstunden', f_min: 'Min.',
+      r_title: 'Gefahrene Route', r_add_stop: '+ Halt hinzufügen…', r_back_home: '+ Zurück nach Hause', r_clear: 'Route leeren',
+      r_noplaces_a: 'Füge zuerst deine Orte hinzu (Zuhause und jeden Arbeitsort) unter', r_noplaces_b: '.',
+      r_empty: 'An diesem Tag keine Fahrt. Füge unten den ersten Halt hinzu.', r_this_day: 'Dieser Tag:',
+      r_missing: { one: '{n} Entfernung fehlt', other: '{n} Entfernungen fehlen' },
+      r_check_maps: 'In Maps prüfen ↗', r_removed_place: 'Gelöschter Ort', r_stop: 'Halt {n}', r_remove_stop: 'Halt {n} entfernen',
+      r_leg_label: 'Kilometer von {a} nach {b}',
+      b_save_day: 'Tag speichern', b_save_changes: 'Änderungen speichern', b_cancel: 'Abbrechen', b_delete_day: 'Tag löschen', b_confirm_delete: 'Zum Löschen erneut klicken',
+      l_days_in: 'Tage im {month}', l_copy: 'Für Excel kopieren', l_csv: 'CSV herunterladen',
+      th_date: 'Datum', th_start: 'Beginn', th_break: 'Pause', th_end: 'Ende', th_total: 'Gesamtstunden', th_route: 'Route', th_km: 'km',
+      l_no_driving: 'Keine Fahrt', l_empty: 'Für {month} sind noch keine Tage eingetragen. Trage oben deinen ersten Tag ein.',
+      l_month_total: { one: 'Monatssumme · {n} Tag', other: 'Monatssumme · {n} Tage' }, chip_example: 'Beispiel',
+      t_hours: 'Gesamtstunden', t_days: { one: '{n} Arbeitstag', other: '{n} Arbeitstage' }, t_km: 'Gesamtkilometer',
+      t_missing: { one: '{n} Teilstrecke hat noch keine Entfernung und wird nicht gezählt.', other: '{n} Teilstrecken haben noch keine Entfernung und werden nicht gezählt.' },
+      h_none: 'Kein Zuhause festgelegt', h_none_sub: 'Trage deine Wohnadresse ein. Deine Tage beginnen und enden dort.', h_add: 'Zuhause hinzufügen', h_badge: 'Zuhause',
+      h_no_address: 'Noch keine Adresse', h_form_title: 'Dein Zuhause', h_save: 'Zuhause speichern',
+      p_name: 'Name', p_address: 'Adresse', p_address_ph: 'Straße und Hausnummer, PLZ, Ort',
+      p_add: 'Hinzufügen', p_save: 'Speichern', p_edit: 'Bearbeiten', p_delete: 'Löschen', p_edit_title: '{name} bearbeiten', p_no_address: 'Keine Adresse',
+      grp_fewo: 'Ferienwohnungen', grp_private: 'Privatkunden',
+      hint_fewo: 'Ferienwohnungen, zu denen du fährst.', hint_private: 'Privatkunden, zu denen du fährst.',
+      add_fewo: 'Ferienwohnung hinzufügen', add_private: 'Privatkunden hinzufügen',
+      ph_fewo: 'z. B. Ferienwohnung am See', ph_private: 'z. B. Familie Schneider',
+      empty_fewo: 'Noch keine Ferienwohnungen. Füge unten die erste hinzu.', empty_private: 'Noch keine Privatkunden. Füge unten den ersten hinzu.',
+      d_add_title: 'Entfernung hinzufügen oder ändern', d_hint: 'Jede Entfernung wird einmal eingetragen, gilt in beide Richtungen und wird für jede Fahrt wiederverwendet.',
+      d_all_title: 'Alle Entfernungen', f_all: 'Alle', f_show: 'Anzeigen',
+      d_from: 'Von', d_to: 'Nach', d_km: 'Kilometer', d_choose: 'Auswählen…',
+      d_save: 'Entfernung speichern', d_check_route: 'Route in Google Maps prüfen ↗', d_open_maps: 'In Maps öffnen ↗',
+      d_empty: 'Noch keine Entfernungen. Füge oben eine hinzu oder trage sie direkt in die Route ein, wenn du einen Tag erfasst.',
+      rate_title: 'Satz pro Kilometer', rate_hint: 'Wird unten im Fahrtenbuch mit den Gesamtkilometern des Monats multipliziert.',
+      rate_unit: '€ pro km', rate_aria: 'Satz in Euro pro Kilometer',
+      e_owner: 'Nur der Besitzer dieses Fahrtenbuchs kann es ändern.',
+      e_full: 'Der Speicher ist voll. Lösche alte Einträge und versuche es erneut.',
+      e_too_many: 'Zu viele Änderungen auf einmal. Warte kurz und versuche es erneut.',
+      e_save_failed: 'Speichern fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut.',
+      e_connecting: 'Die Verbindung wird noch hergestellt. Versuche es in ein paar Sekunden erneut.',
+      e_num: 'Gib die Entfernung als Zahl ein, z. B. 12,5.',
+      m_dist_saved_reuse: '{a} ↔ {b}: {km} gespeichert. Wird ab jetzt wiederverwendet.',
+      e_fill_times: 'Fülle Datum, Beginn und Ende aus.',
+      e_day_exists: 'Für {day} gibt es schon einen Eintrag. Er ist jetzt zum Bearbeiten geöffnet.',
+      m_day_saved: '{day} gespeichert: {h} h, {km}', m_day_deleted: '{day} gelöscht.',
+      m_press_copy: 'Drücke Strg+C (⌘C auf dem Mac), um die markierte Tabelle zu kopieren.',
+      m_copied: 'Tabelle kopiert. Füge sie in Excel, Numbers oder Google Tabellen ein.',
+      m_csv_saved: 'CSV gespeichert.', e_prompt_open: 'Ein Speicherdialog ist bereits geöffnet.',
+      e_cant_save: 'Die Datei kann hier nicht gespeichert werden. Nutze stattdessen „Für Excel kopieren“.',
+      m_examples_removed: 'Beispiele entfernt. Füge zuerst dein Zuhause und deine Arbeitsorte hinzu.',
+      m_home_saved: 'Wohnadresse gespeichert.', e_give_name: 'Gib dem Ort einen Namen.',
+      m_saved_name: '{name} gespeichert.', m_added_to: '{name} zu {group} hinzugefügt.',
+      c_used_on: { one: 'An {n} Tag genutzt. Löschen?', other: 'An {n} Tagen genutzt. Löschen?' }, c_click_again: 'Erneut klicken',
+      m_deleted_name: '{name} gelöscht.', e_choose_both: 'Wähle beide Orte aus.', e_choose_diff: 'Wähle zwei verschiedene Orte aus.',
+      m_dist_saved: '{a} ↔ {b}: {km} gespeichert.', e_rate_num: 'Gib den Satz als Zahl ein, z. B. 0,30.',
+      m_rate_set: 'Satz auf {r} € pro km gesetzt.',
+      x_month_total: 'Monatssumme', x_total_km: 'Gesamtkilometer', x_calc: 'Kilometer × {r} €', x_missing: '(+ fehlende)'
+    },
+    pl: {
+      app_h1: 'Kilometry i czas pracy', app_sub: 'Twoje dni pracy, godziny i kilometry w każdym miesiącu.', lang: 'Język',
+      prev_month: 'Poprzedni miesiąc', next_month: 'Następny miesiąc',
+      st_connecting: 'Łączenie z zapisanym dziennikiem…',
+      st_db: 'Zapisano na Twoim koncie Claude. Otwórz tę stronę na dowolnym urządzeniu, aby zobaczyć ten sam dziennik.',
+      st_local: 'Zapisano tylko na tym urządzeniu. Użyj „Eksportuj kopię”, aby zrobić kopię zapasową lub przenieść dane na inne urządzenie.',
+      bk_export: 'Eksportuj kopię', bk_import: 'Importuj kopię', m_exported: 'Zapisano kopię zapasową.',
+      m_imported: 'Zaimportowano kopię: miejsca {places}, odległości {dist}, dni {days}.', e_import: 'Ten plik nie jest kopią zapasową dziennika.',
+      st_memory: 'Nie zapisano: ta przeglądarka blokuje zapis, więc wpisy znikną po zamknięciu strony.',
+      note_unreachable: 'Nie można jeszcze połączyć się z zapisanymi danymi, więc mogą być niepełne.',
+      note_lost: 'Utracono połączenie z zapisanymi danymi. Odśwież stronę.',
+      tab_log: 'Dziennik', tab_places: 'Miejsca', tab_dist: 'Odległości',
+      ex_strong: 'Przykładowe wpisy.', ex_text: 'Miejsca, odległości i dni oznaczone jako „Przykład” pokazują, jak działa dziennik.',
+      ex_remove: 'Usuń przykłady', ex_confirm: 'Kliknij ponownie, aby usunąć',
+      search_title: 'Znajdź odległość', search_ph: 'Szukaj po nazwie, adresie lub miejscowości', search_clear: 'Wyczyść wyszukiwanie',
+      search_none: 'Nie znaleziono odległości dla „{q}”.', search_more: 'Pokazano {shown} z {total}. Wpisz więcej, aby zawęzić.',
+      f_title_new: 'Dodaj dzień', f_title_edit: 'Edytuj: {day}',
+      f_hint_copied: 'Godziny i trasę skopiowano z dnia {day}. Zmień to, co było inaczej.',
+      f_hint_start: 'Wpisz godziny, a potem dodaj po kolei odwiedzone miejsca.',
+      f_hint_example: 'To jest przykładowy wpis. Po zapisaniu stanie się Twoim własnym.',
+      time_steps: 'Krok czasu', step_15: '15 min', step_1: '1 min',
+      f_date: 'Data', f_start: 'Początek', f_break: 'Przerwa', f_end: 'Koniec', f_total: 'Suma godzin', f_min: 'min',
+      r_title: 'Przejechana trasa', r_add_stop: '+ Dodaj przystanek…', r_back_home: '+ Powrót do domu', r_clear: 'Wyczyść trasę',
+      r_noplaces_a: 'Najpierw dodaj swoje miejsca (dom i każde miejsce pracy) w zakładce', r_noplaces_b: '.',
+      r_empty: 'Tego dnia bez jazdy. Dodaj pierwszy przystanek poniżej.', r_this_day: 'Ten dzień:',
+      r_missing: { one: 'brak odległości: {n}', few: 'brak odległości: {n}', many: 'brak odległości: {n}', other: 'brak odległości: {n}' },
+      r_check_maps: 'Sprawdź w Mapach ↗', r_removed_place: 'Usunięte miejsce', r_stop: 'Przystanek {n}', r_remove_stop: 'Usuń przystanek {n}',
+      r_leg_label: 'Kilometry: {a} → {b}',
+      b_save_day: 'Zapisz dzień', b_save_changes: 'Zapisz zmiany', b_cancel: 'Anuluj', b_delete_day: 'Usuń dzień', b_confirm_delete: 'Kliknij ponownie, aby usunąć',
+      l_days_in: 'Dni: {month}', l_copy: 'Kopiuj do Excela', l_csv: 'Pobierz CSV',
+      th_date: 'Data', th_start: 'Początek', th_break: 'Przerwa', th_end: 'Koniec', th_total: 'Suma godzin', th_route: 'Trasa', th_km: 'km',
+      l_no_driving: 'Bez jazdy', l_empty: 'Brak wpisów ({month}). Dodaj pierwszy dzień w formularzu powyżej.',
+      l_month_total: { one: 'Suma miesiąca · {n} dzień', few: 'Suma miesiąca · {n} dni', many: 'Suma miesiąca · {n} dni', other: 'Suma miesiąca · {n} dnia' },
+      chip_example: 'Przykład',
+      t_hours: 'Suma godzin', t_days: { one: '{n} dzień pracy', few: '{n} dni pracy', many: '{n} dni pracy', other: '{n} dnia pracy' }, t_km: 'Suma kilometrów',
+      t_missing: { one: 'Odcinki bez odległości (nieliczone): {n}', few: 'Odcinki bez odległości (nieliczone): {n}', many: 'Odcinki bez odległości (nieliczone): {n}', other: 'Odcinki bez odległości (nieliczone): {n}' },
+      h_none: 'Dom nie jest ustawiony', h_none_sub: 'Dodaj adres domu. Twoje dni zaczynają się i kończą tam.', h_add: 'Dodaj dom', h_badge: 'Dom',
+      h_no_address: 'Brak adresu', h_form_title: 'Twój dom', h_save: 'Zapisz dom',
+      p_name: 'Nazwa', p_address: 'Adres', p_address_ph: 'Ulica i numer, kod pocztowy, miejscowość',
+      p_add: 'Dodaj', p_save: 'Zapisz', p_edit: 'Edytuj', p_delete: 'Usuń', p_edit_title: 'Edytuj: {name}', p_no_address: 'Brak adresu',
+      grp_fewo: 'Apartamenty wakacyjne', grp_private: 'Klienci prywatni',
+      hint_fewo: 'Apartamenty (Ferienwohnungen), do których jeździsz.', hint_private: 'Klienci prywatni, do których jeździsz.',
+      add_fewo: 'Dodaj apartament', add_private: 'Dodaj klienta prywatnego',
+      ph_fewo: 'np. Apartament nad jeziorem', ph_private: 'np. Rodzina Kowalskich',
+      empty_fewo: 'Brak apartamentów. Dodaj pierwszy poniżej.', empty_private: 'Brak klientów prywatnych. Dodaj pierwszego poniżej.',
+      d_add_title: 'Dodaj lub zmień odległość', d_hint: 'Każdą odległość wpisujesz raz, liczy się w obie strony i jest używana przy każdej trasie.',
+      d_all_title: 'Wszystkie odległości', f_all: 'Wszystkie', f_show: 'Pokaż',
+      d_from: 'Skąd', d_to: 'Dokąd', d_km: 'Kilometry', d_choose: 'Wybierz…',
+      d_save: 'Zapisz odległość', d_check_route: 'Sprawdź trasę w Mapach Google ↗', d_open_maps: 'Otwórz w Mapach ↗',
+      d_empty: 'Brak odległości. Dodaj ją powyżej albo wpisz bezpośrednio w trasie przy dodawaniu dnia.',
+      rate_title: 'Stawka za kilometr', rate_hint: 'Mnożona przez sumę kilometrów z miesiąca na dole dziennika.',
+      rate_unit: '€ za km', rate_aria: 'Stawka w euro za kilometr',
+      e_owner: 'Tylko właściciel może zmieniać ten dziennik.',
+      e_full: 'Miejsce na dane jest pełne. Usuń stare wpisy i spróbuj ponownie.',
+      e_too_many: 'Za dużo zmian naraz. Poczekaj chwilę i spróbuj ponownie.',
+      e_save_failed: 'Nie udało się zapisać. Sprawdź połączenie i spróbuj ponownie.',
+      e_connecting: 'Trwa łączenie z zapisanym dziennikiem. Spróbuj za kilka sekund.',
+      e_num: 'Wpisz odległość jako liczbę, np. 12,5.',
+      m_dist_saved_reuse: 'Zapisano {a} ↔ {b}: {km}. Od teraz będzie używana automatycznie.',
+      e_fill_times: 'Uzupełnij datę, godzinę rozpoczęcia i zakończenia.',
+      e_day_exists: '{day} ma już wpis. Otwarto go do edycji.',
+      m_day_saved: 'Zapisano {day}: {h} h, {km}', m_day_deleted: 'Usunięto {day}.',
+      m_press_copy: 'Naciśnij Ctrl+C (⌘C na Macu), aby skopiować zaznaczoną tabelę.',
+      m_copied: 'Skopiowano tabelę. Wklej ją do Excela, Numbers lub Arkuszy Google.',
+      m_csv_saved: 'Zapisano CSV.', e_prompt_open: 'Okno zapisu jest już otwarte.',
+      e_cant_save: 'Nie można tu zapisać pliku. Użyj opcji „Kopiuj do Excela”.',
+      m_examples_removed: 'Usunięto przykłady. Zacznij od dodania domu i miejsc pracy.',
+      m_home_saved: 'Zapisano adres domu.', e_give_name: 'Podaj nazwę miejsca.',
+      m_saved_name: 'Zapisano: {name}.', m_added_to: 'Dodano {name} do listy: {group}.',
+      c_used_on: { one: 'Użyte w {n} dniu. Usunąć?', few: 'Użyte w {n} dniach. Usunąć?', many: 'Użyte w {n} dniach. Usunąć?', other: 'Użyte w {n} dniach. Usunąć?' },
+      c_click_again: 'Kliknij ponownie',
+      m_deleted_name: 'Usunięto: {name}.', e_choose_both: 'Wybierz oba miejsca.', e_choose_diff: 'Wybierz dwa różne miejsca.',
+      m_dist_saved: 'Zapisano {a} ↔ {b}: {km}.', e_rate_num: 'Wpisz stawkę jako liczbę, np. 0,30.',
+      m_rate_set: 'Ustawiono stawkę {r} € za km.',
+      x_month_total: 'Suma miesiąca', x_total_km: 'Suma kilometrów', x_calc: 'Kilometry × {r} €', x_missing: '(+ brakujące)'
+    }
+  };
+  let lang = 'en';
+  try { const v = localStorage.getItem(LS_LANG); if (v && LANGS[v]) lang = v; else { const n = (navigator.language || '').slice(0, 2); if (LANGS[n]) lang = n; } } catch (e) {}
+  const LOC = () => LANGS[lang];
+  function t(key, vars) {
+    vars = vars || {};
+    let s = (STR[lang] && STR[lang][key] != null) ? STR[lang][key] : (STR.en[key] != null ? STR.en[key] : key);
+    if (typeof s === 'object') {
+      const cat = new Intl.PluralRules(LOC()).select(Number(vars.n) || 0);
+      s = s[cat] != null ? s[cat] : s.other;
+    }
+    return String(s).replace(/\{(\w+)\}/g, (m, k) => vars[k] != null ? vars[k] : m);
+  }
+  function applyStatic() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+    $('#langSelect').value = lang;
+    $('#addStop').setAttribute('aria-label', t('r_add_stop'));
+  }
+
+  const DEFAULT_SETTINGS = { rate: 0.30 };
+  const COLS = ['places', 'distances', 'days', 'settings'];
+  const LS_KEY = 'work-mileage-log-v1';
+  const state = { places: {}, distances: {}, days: {}, settings: { ...DEFAULT_SETTINGS } };
+  let mode = 'local'; // local | memory (storage blocked)
+  let loadNote = '';
+
+  /* ---------- formatting (numbers stay in German format: comma decimals, € after the amount) ---------- */
+  const nf1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const nf2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const eur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+  const fmtKm = n => nf1.format(n) + ' km';
+  const pad = n => String(n).padStart(2, '0');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function parseNum(s) {
+    if (s == null) return NaN;
+    s = String(s).trim().replace(/\s|€|km/gi, '');
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    return s === '' ? NaN : Number(s);
+  }
+  const isoOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const dateOf = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+  const addDays = (iso, n) => { const d = dateOf(iso); d.setDate(d.getDate() + n); return isoOf(d); };
+  const shiftMonth = (mk, delta) => { const [y, m] = mk.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+  const monthLabel = mk => { const [y, m] = mk.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString(LOC(), { month: 'long', year: 'numeric' }); };
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const fmtDay = iso => { const d = dateOf(iso); return `${d.toLocaleDateString(LOC(), { weekday: 'short' })} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`; };
+  const fmtFullDate = iso => { const d = dateOf(iso); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  const toMin = s => { if (!s || !/^\d{1,2}:\d{2}/.test(s)) return null; const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+  const fmtHM = m => { m = Math.max(0, Math.round(m)); return `${Math.floor(m / 60)}:${pad(m % 60)}`; };
+  function dayWork(d) {
+    const s = toMin(d.start), e = toMin(d.end);
+    if (s == null || e == null) return 0;
+    let x = e - s; if (x < 0) x += 1440; // past midnight
+    return Math.max(0, x - (Number(d.breakMin) || 0));
+  }
+  const todayIso = isoOf(new Date());
+  let viewMonth = todayIso.slice(0, 7);
+
+  /* ---------- places & distances ---------- */
+  const placeList = () => Object.entries(state.places).map(([id, p]) => ({ id, ...p }))
+    .sort((a, b) => (b.home ? 1 : 0) - (a.home ? 1 : 0) || (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name)));
+  const homeId = () => { const l = placeList(); const h = l.find(p => p.home); return h ? h.id : (l[0]?.id || null); };
+  const placeName = id => state.places[id]?.name || t('r_removed_place');
+  const GROUPS = [
+    { key: 'fewo', title: () => t('grp_fewo'), addKey: 'add_fewo', emptyKey: 'empty_fewo' },
+    { key: 'private', title: () => t('grp_private'), addKey: 'add_private', emptyKey: 'empty_private' }
+  ];
+  // places saved before the two lists existed have no group: they are Ferienwohnungen
+  const groupOf = id => { const p = state.places[id]; if (!p) return null; return p.home ? 'home' : (p.group === 'private' ? 'private' : 'fewo'); };
+  const nameHtml = id => {
+    const g = groupOf(id), n = esc(placeName(id));
+    return g === 'private' ? `<span class="pc">${n}</span>` : g === 'fewo' ? `<span class="fw">${n}</span>` : n;
+  };
+  function optionsHtml(sel, first) {
+    const l = placeList();
+    const o = p => `<option value="${p.id}"${p.id === sel ? ' selected' : ''}>${esc(p.name)}</option>`;
+    let h = l.filter(p => groupOf(p.id) === 'home').map(o).join('');
+    const order = first === 'private' ? [GROUPS[1], GROUPS[0]] : GROUPS;
+    for (const g of order) { const ps = l.filter(p => groupOf(p.id) === g.key); if (ps.length) h += `<optgroup label="${esc(g.title())}">${ps.map(o).join('')}</optgroup>`; }
+    return h;
+  }
+  const pairKey = (a, b) => [a, b].sort().join('__');
+  const getDist = (a, b) => a === b ? 0 : (state.distances[pairKey(a, b)]?.km ?? null);
+  function routeKm(route) {
+    let km = 0; const missing = [];
+    for (let i = 1; i < (route || []).length; i++) {
+      const d = getDist(route[i - 1], route[i]);
+      if (d == null) missing.push([route[i - 1], route[i]]); else km += Number(d) || 0;
+    }
+    return { km, missing };
+  }
+  const mapsUrl = (a, b) => {
+    const q = id => encodeURIComponent(state.places[id]?.address || state.places[id]?.name || '');
+    return `https://www.google.com/maps/dir/?api=1&origin=${q(a)}&destination=${q(b)}&travelmode=driving`;
+  };
+  const newId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  /* ---------- distance search ---------- */
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
+  const placeText = id => norm(`${state.places[id]?.name || ''} ${state.places[id]?.address || ''}`);
+  // Every word must match one of the two places (name or address). The place that matches more words is listed first.
+  function searchDistances(q, group) {
+    const words = norm(q).split(/\s+/).filter(Boolean);
+    const homeFirst = (p, r) => (groupOf(r) === 'home') - (groupOf(p) === 'home') || placeName(p).localeCompare(placeName(r));
+    return Object.entries(state.distances)
+      .map(([key, d]) => ({ key, ...d }))
+      .filter(d => state.places[d.a] && state.places[d.b])
+      .filter(d => !group || group === 'all' || groupOf(d.a) === group || groupOf(d.b) === group)
+      .map(d => {
+        if (!words.length) { const [x, y] = [d.a, d.b].sort(homeFirst); return { ...d, x, y }; }
+        const ta = placeText(d.a), tb = placeText(d.b);
+        let na = 0, nb = 0;
+        for (const w of words) {
+          const ia = ta.includes(w), ib = tb.includes(w);
+          if (!ia && !ib) return null;
+          if (ia) na++; if (ib) nb++;
+        }
+        const [x, y] = nb > na ? [d.b, d.a] : [d.a, d.b];
+        return { ...d, x, y };
+      })
+      .filter(Boolean)
+      .sort((p, r) => (groupOf(r.x) === 'home') - (groupOf(p.x) === 'home') || placeName(p.x).localeCompare(placeName(r.x)) || placeName(p.y).localeCompare(placeName(r.y)));
+  }
+
+  /* ---------- storage: everything stays on this device ---------- */
+  function applyLocal(col, id, data) {
+    if (col === 'settings') state.settings = { ...DEFAULT_SETTINGS, ...(data || {}) };
+    else if (data == null) { const m = { ...state[col] }; delete m[id]; state[col] = m; }
+    else state[col] = { ...state[col], [id]: data };
+  }
+  function persistLocal() {
+    if (mode !== 'local') return;
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+    catch (e) { mode = 'memory'; renderStatus(); }
+  }
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        state.places = s.places || {}; state.distances = s.distances || {}; state.days = s.days || {};
+        state.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  async function put(col, id, data) { applyLocal(col, id, data); persistLocal(); render(); return true; }
+  async function remove(col, id) { applyLocal(col, id, null); persistLocal(); render(); return true; }
+
+  /* ---------- backup files ---------- */
+  function saveFile(name, text, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  const okId = k => /^[A-Za-z0-9_.~:@+-]{1,200}$/.test(String(k));
+  const isObj = o => o && typeof o === 'object' && !Array.isArray(o);
+  const okTime = v => typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v) ? v : '';
+  // only well-formed entries are taken from an imported file
+  function cleanImport(data) {
+    const places = {}, distances = {}, days = {};
+    for (const [k, v] of Object.entries(isObj(data.places) ? data.places : {})) {
+      if (!okId(k) || !isObj(v)) continue;
+      const p = { name: String(v.name || '').slice(0, 200), address: String(v.address || '').slice(0, 300), home: !!v.home, order: Number(v.order) || 0 };
+      if (v.group === 'private' || v.group === 'fewo') p.group = v.group;
+      places[k] = p;
+    }
+    for (const [k, v] of Object.entries(isObj(data.distances) ? data.distances : {})) {
+      if (!okId(k) || !isObj(v) || !okId(v.a) || !okId(v.b) || !isFinite(Number(v.km))) continue;
+      distances[k] = { a: String(v.a), b: String(v.b), km: Math.round(Number(v.km) * 10) / 10 };
+    }
+    for (const [k, v] of Object.entries(isObj(data.days) ? data.days : {})) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !isObj(v)) continue;
+      days[k] = { date: k, start: okTime(v.start), end: okTime(v.end), breakMin: Math.max(0, parseInt(v.breakMin, 10) || 0), route: Array.isArray(v.route) ? v.route.map(String).filter(okId) : [] };
+    }
+    const rate = Number(isObj(data.settings) ? data.settings.rate : NaN);
+    return { places, distances, days, rate: isFinite(rate) && rate >= 0 ? rate : null };
+  }
+
+  /* ---------- toast & two-step buttons ---------- */
+  let toastTimer;
+  function toast(msg, kind) {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (kind === 'error' ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, kind === 'error' ? 4200 : 2600);
+  }
+  function confirmStep(btn, label) {
+    if (btn.dataset.armed === '1') return true;
+    const old = btn.textContent;
+    btn.dataset.armed = '1'; btn.textContent = label; btn.classList.add('armed');
+    setTimeout(() => { if (btn.isConnected && btn.dataset.armed === '1') { btn.dataset.armed = ''; btn.textContent = old; btn.classList.remove('armed'); } }, 3500);
+    return false;
+  }
+
+  /* ---------- time fields: 15-minute dropdowns or minute-by-minute inputs ---------- */
+  let step15 = false;
+  try { step15 = localStorage.getItem(LS_STEP) === '15'; } catch (e) {}
+  const T = {
+    start: { inp: $('#f-start'), sel: $('#f-start-q'), kind: 'time' },
+    brk: { inp: $('#f-break'), sel: $('#f-break-q'), kind: 'min' },
+    end: { inp: $('#f-end'), sel: $('#f-end-q'), kind: 'time' }
+  };
+  (function fillSelects() {
+    let h = '';
+    for (let m = 0; m < 1440; m += 15) { const v = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; h += `<option value="${v}">${v}</option>`; }
+    T.start.sel.innerHTML = h; T.end.sel.innerHTML = h;
+    let b = '';
+    for (let m = 0; m <= 240; m += 15) b += `<option value="${m}">${m}</option>`;
+    T.brk.sel.innerHTML = b;
+  })();
+  // keep a value that is not on the 15-minute grid (e.g. 08:07) as its own option, in order
+  function ensureOption(f, v) {
+    v = String(v);
+    if ([...f.sel.options].some(o => o.value === v)) return;
+    const key = x => f.kind === 'time' ? x : Number(x);
+    const opt = new Option(v, v);
+    const after = [...f.sel.options].find(o => key(o.value) > key(v));
+    f.sel.add(opt, after || null);
+  }
+  const getVal = f => step15 ? f.sel.value : f.inp.value;
+  function setVal(f, v) {
+    v = v == null ? '' : String(v);
+    f.inp.value = v;
+    if (v !== '') { ensureOption(f, v); f.sel.value = v; }
+  }
+  function applyStepMode() {
+    for (const f of Object.values(T)) { f.inp.hidden = step15; f.sel.hidden = !step15; }
+    document.querySelectorAll('[data-step]').forEach(b => b.setAttribute('aria-checked', String((b.dataset.step === '15') === step15)));
+  }
+
+  /* ---------- day form ---------- */
+  const fDate = $('#f-date'), fTotal = $('#f-total');
+  let editingDate = null, formRoute = [], formDirty = false, routeRenderPending = false, formHint = null;
+
+  function updateFormTotal() {
+    fTotal.textContent = fmtHM(dayWork({ start: getVal(T.start), end: getVal(T.end), breakMin: getVal(T.brk) })) + ' h';
+  }
+  function renderFormChrome() {
+    $('#formTitle').textContent = editingDate ? t('f_title_edit', { day: fmtDay(editingDate) }) : t('f_title_new');
+    $('#formHint').textContent = formHint ? t(formHint.key, { day: formHint.day ? fmtDay(formHint.day) : '' }) : '';
+    $('#saveDay').textContent = editingDate ? t('b_save_changes') : t('b_save_day');
+    $('#cancelEdit').hidden = !editingDate; $('#deleteDay').hidden = !editingDate;
+  }
+  function defaultDate() {
+    const base = todayIso.startsWith(viewMonth) ? todayIso : viewMonth + '-01';
+    let c = base, guard = 0;
+    while (state.days[c] && c.startsWith(viewMonth) && guard++ < 31) c = addDays(c, 1);
+    return c.startsWith(viewMonth) ? c : base;
+  }
+  function resetForm(hint) {
+    const date = (hint && hint.startsWith(viewMonth) && !state.days[hint]) ? hint : defaultDate();
+    if (state.days[date]) { loadDay(date); return; }
+    editingDate = null; formDirty = false;
+    const prevKey = Object.keys(state.days).filter(d => d < date).sort().pop();
+    const prev = prevKey ? state.days[prevKey] : null;
+    fDate.value = date;
+    setVal(T.start, prev?.start || '08:00');
+    setVal(T.brk, prev ? (prev.breakMin ?? 0) : 30);
+    setVal(T.end, prev?.end || '16:30');
+    const hid = homeId();
+    formRoute = prev?.route?.length ? prev.route.filter(id => state.places[id]) : (hid ? [hid] : []);
+    formHint = prev ? { key: 'f_hint_copied', day: prevKey } : { key: 'f_hint_start' };
+    renderFormChrome(); updateFormTotal(); renderRoute(); renderLedger();
+  }
+  function loadDay(date) {
+    const d = state.days[date]; if (!d) return;
+    editingDate = date; formDirty = false;
+    fDate.value = date; setVal(T.start, d.start || ''); setVal(T.brk, d.breakMin ?? 0); setVal(T.end, d.end || '');
+    formRoute = [...(d.route || [])];
+    formHint = d.example ? { key: 'f_hint_example' } : null;
+    renderFormChrome(); updateFormTotal(); renderRoute(); renderLedger();
+  }
+
+  function renderRoute() {
+    const box = $('#routeList');
+    const ae = document.activeElement;
+    if (ae && box.contains(ae) && ae.tagName === 'INPUT') { routeRenderPending = true; updateRouteTotal(); return; }
+    routeRenderPending = false;
+    const places = placeList();
+    if (!places.length) {
+      box.innerHTML = `<li class="route-empty">${esc(t('r_noplaces_a'))} <button type="button" class="linklike" data-goto="places">${esc(t('tab_places'))}</button>${esc(t('r_noplaces_b'))}</li>`;
+      $('#routeAdd').hidden = true; updateRouteTotal(); return;
+    }
+    $('#routeAdd').hidden = false;
+    let html = '';
+    formRoute.forEach((id, i) => {
+      if (i > 0) {
+        const a = formRoute[i - 1], b = id, d = getDist(a, b);
+        if (d == null) {
+          html += `<li class="leg missing"><span class="leg-line"></span>
+            <label class="leg-input"><span class="sr">${esc(t('r_leg_label', { a: placeName(a), b: placeName(b) }))}</span><input type="text" inputmode="decimal" placeholder="km?" id="leg-${i}" data-a="${a}" data-b="${b}"> km</label>
+            <a class="maps-link" href="${mapsUrl(a, b)}" target="_blank" rel="noopener">${esc(t('r_check_maps'))}</a></li>`;
+        } else {
+          html += `<li class="leg"><span class="leg-line"></span><span class="leg-km">${fmtKm(Number(d))}</span></li>`;
+        }
+      }
+      const gone = !state.places[id];
+      html += `<li class="stop"><span class="pin${i === 0 ? ' first' : ''}"></span><select id="stop-${i}" data-i="${i}" aria-label="${esc(t('r_stop', { n: i + 1 }))}">${gone ? `<option value="${esc(id)}" selected>${esc(t('r_removed_place'))}</option>` : ''}${optionsHtml(id)}</select><button type="button" class="icon-btn" data-rm="${i}" aria-label="${esc(t('r_remove_stop', { n: i + 1 }))}">×</button></li>`;
+    });
+    box.innerHTML = html || `<li class="route-empty">${esc(t('r_empty'))}</li>`;
+    $('#addStop').innerHTML = `<option value="">${esc(t('r_add_stop'))}</option>` + optionsHtml(null);
+    const hid = homeId();
+    $('#addHome').hidden = !hid || formRoute.length === 0 || formRoute[formRoute.length - 1] === hid;
+    $('#clearRoute').hidden = formRoute.length === 0;
+    updateRouteTotal();
+  }
+  function updateRouteTotal() {
+    const { km, missing } = routeKm(formRoute);
+    const legs = Math.max(0, formRoute.length - 1);
+    let h = legs ? `${esc(t('r_this_day'))} <b>${fmtKm(km)}</b>` : '';
+    if (missing.length) h += ` · <span class="warn">${esc(t('r_missing', { n: missing.length }))}</span>`;
+    $('#routeTotal').innerHTML = h;
+  }
+
+  /* ---------- logbook distance search ---------- */
+  const LOG_LIMIT = 12;
+  function renderLogSearch() {
+    const q = $('#logSearch').value.trim();
+    $('#logSearchClear').hidden = !q;
+    const list = $('#logResults'), msg = $('#logSearchMsg');
+    if (!q) { list.hidden = true; msg.hidden = true; list.innerHTML = ''; return; }
+    const res = searchDistances(q);
+    if (!res.length) { list.hidden = true; list.innerHTML = ''; msg.hidden = false; msg.textContent = t('search_none', { q }); return; }
+    list.hidden = false;
+    list.innerHTML = res.slice(0, LOG_LIMIT).map(d => `<li><span class="pair">${nameHtml(d.x)} ↔ ${nameHtml(d.y)}</span>
+      <span class="meta"><span class="row-km">${fmtKm(Number(d.km) || 0)}</span><a class="maps-link" href="${mapsUrl(d.x, d.y)}" target="_blank" rel="noopener">${esc(t('d_open_maps'))}</a></span></li>`).join('');
+    msg.hidden = res.length <= LOG_LIMIT;
+    msg.textContent = res.length > LOG_LIMIT ? t('search_more', { shown: LOG_LIMIT, total: res.length }) : '';
+  }
+
+  /* ---------- ledger & totals ---------- */
+  function monthData() {
+    const days = Object.entries(state.days).filter(([d]) => d.startsWith(viewMonth)).sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, d]) => { const r = routeKm(d.route); return { ...d, date, work: dayWork(d), km: r.km, missing: r.missing }; });
+    const totalMin = days.reduce((s, d) => s + d.work, 0);
+    const totalKm = days.reduce((s, d) => s + d.km, 0);
+    const missing = days.reduce((s, d) => s + d.missing.length, 0);
+    const rate = Number(state.settings.rate) || 0;
+    return { days, totalMin, totalKm, missing, rate, amount: Math.round(totalKm * rate * 100) / 100 };
+  }
+  function renderLedger() {
+    const m = monthData();
+    const ml = monthLabel(viewMonth);
+    $('#ledgerTitle').textContent = t('l_days_in', { month: ml });
+    $('#ledgerBody').innerHTML = m.days.length ? m.days.map(d => {
+      const route = (d.route || []).length ? d.route.map(nameHtml).join(' → ') : `<span class="faint">${esc(t('l_no_driving'))}</span>`;
+      const km = d.missing.length ? `<span class="km-warn" title="${esc(t('r_missing', { n: d.missing.length }))}">${nf1.format(d.km)} + ?</span>` : nf1.format(d.km);
+      return `<tr class="day${editingDate === d.date ? ' is-editing' : ''}" data-date="${d.date}">
+        <td><button type="button" class="row-btn" data-date="${d.date}">${esc(fmtDay(d.date))}</button>${d.example ? `<span class="chip">${esc(t('chip_example'))}</span>` : ''}</td>
+        <td class="n">${esc(d.start || '–')}</td><td class="n">${fmtHM(Number(d.breakMin) || 0)}</td><td class="n">${esc(d.end || '–')}</td>
+        <td class="n strong">${fmtHM(d.work)}</td><td class="route-cell">${route}</td><td class="n">${km}</td></tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty-cell">${esc(t('l_empty', { month: ml }))}</td></tr>`;
+    $('#ledgerFoot').innerHTML = m.days.length ? `<tr><th scope="row" colspan="4">${esc(t('l_month_total', { n: m.days.length }))}</th><td class="n">${fmtHM(m.totalMin)}</td><td></td><td class="n">${nf1.format(m.totalKm)}</td></tr>` : '';
+
+    $('#totHours').textContent = fmtHM(m.totalMin) + ' h';
+    $('#totDays').textContent = t('t_days', { n: m.days.length });
+    renderOdo(m.totalKm);
+    $('#calcLabel').textContent = `${fmtKm(m.totalKm)} × ${nf2.format(m.rate)} €`;
+    $('#amount').textContent = '= ' + eur.format(m.amount);
+    const mm = $('#totMissing');
+    mm.hidden = !m.missing;
+    mm.textContent = m.missing ? t('t_missing', { n: m.missing }) : '';
+  }
+  function renderOdo(km) {
+    const tt = Math.round(km * 10);
+    const ints = String(Math.floor(tt / 10)).padStart(5, '0');
+    $('#odo').innerHTML = ints.split('').map(c => `<span class="d" aria-hidden="true">${c}</span>`).join('') +
+      `<span class="sep" aria-hidden="true">,</span><span class="d tenth" aria-hidden="true">${tt % 10}</span><span class="unit" aria-hidden="true">km</span>`;
+    $('#odo').setAttribute('aria-label', fmtKm(km));
+  }
+
+  /* ---------- places view ---------- */
+  const editingPlace = { fewo: null, private: null };
+  let editingHome = false;
+  function placeRow(p) {
+    const used = Object.values(state.days).filter(d => (d.route || []).includes(p.id)).length;
+    return `<li><div class="row-main"><div class="row-title">${esc(p.name)}${p.example ? `<span class="chip">${esc(t('chip_example'))}</span>` : ''}</div>
+      <div class="row-sub">${p.address ? esc(p.address) : `<span class="faint">${esc(t('p_no_address'))}</span>`}</div></div>
+      <div class="row-actions"><button type="button" class="btn ghost sm" data-edit-place="${p.id}">${esc(t('p_edit'))}</button><button type="button" class="btn ghost sm danger" data-del-place="${p.id}" data-used="${used}">${esc(t('p_delete'))}</button></div></li>`;
+  }
+  function renderHome() {
+    const h = placeList().find(p => p.home);
+    $('#homeView').innerHTML = h
+      ? `<div class="row-main"><div class="row-title">${esc(h.name)}<span class="badge">${esc(t('h_badge'))}</span></div><div class="row-sub">${h.address ? esc(h.address) : `<span class="faint">${esc(t('h_no_address'))}</span>`}</div></div><button type="button" class="btn ghost sm" id="editHome">${esc(t('p_edit'))}</button>`
+      : `<div class="row-main"><div class="row-title">${esc(t('h_none'))}</div><div class="row-sub">${esc(t('h_none_sub'))}</div></div><button type="button" class="btn primary sm" id="editHome">${esc(t('h_add'))}</button>`;
+    $('#homeView').hidden = editingHome;
+    $('#homeForm').hidden = !editingHome;
+  }
+  function renderPlaces() {
+    renderHome();
+    const list = placeList();
+    for (const g of GROUPS) {
+      const k = g.key;
+      const ps = list.filter(p => groupOf(p.id) === k);
+      $(`#count-${k}`).textContent = ps.length ? String(ps.length) : '';
+      $(`#placeList-${k}`).innerHTML = ps.length ? ps.map(placeRow).join('') : `<li class="empty-row">${esc(t(g.emptyKey))}</li>`;
+    }
+  }
+  function renderPlaceFormChrome(k) {
+    const g = GROUPS.find(x => x.key === k);
+    const p = editingPlace[k] ? state.places[editingPlace[k]] : null;
+    $(`#placeFormTitle-${k}`).textContent = p ? t('p_edit_title', { name: p.name }) : t(g.addKey);
+    $(`#savePlace-${k}`).textContent = p ? t('p_save') : t('p_add');
+    $(`#cancelPlace-${k}`).hidden = !p;
+  }
+  function resetPlaceForm(k) {
+    editingPlace[k] = null;
+    $(`#p-name-${k}`).value = ''; $(`#p-address-${k}`).value = '';
+    renderPlaceFormChrome(k);
+  }
+  const resetPlaceForms = () => GROUPS.forEach(g => resetPlaceForm(g.key));
+
+  /* ---------- distances view ---------- */
+  let distGroup = 'all';
+  function fillSelect(sel) {
+    const v = sel.value;
+    sel.innerHTML = `<option value="">${esc(t('d_choose'))}</option>` + optionsHtml(null);
+    if (state.places[v]) sel.value = v;
+  }
+  function updateDistMaps() {
+    const a = $('#d-from').value, b = $('#d-to').value, link = $('#d-maps');
+    if (a && b && a !== b) { link.href = mapsUrl(a, b); link.hidden = false; } else link.hidden = true;
+  }
+  function renderDistances() {
+    fillSelect($('#d-from')); fillSelect($('#d-to')); updateDistMaps();
+    document.querySelectorAll('#distGroup [data-group]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.group === distGroup)));
+    const q = $('#distSearch').value.trim();
+    $('#distSearchClear').hidden = !q;
+    const total = Object.keys(state.distances).length;
+    const res = searchDistances(q, distGroup);
+    $('#count-dist').textContent = total ? (res.length === total ? String(total) : `${res.length} / ${total}`) : '';
+    $('#distList').innerHTML = res.length ? res.map(d => `<li><div class="row-main"><div class="row-title">${nameHtml(d.x)} ↔ ${nameHtml(d.y)}${d.example ? `<span class="chip">${esc(t('chip_example'))}</span>` : ''}</div>
+        <div class="row-sub"><a class="maps-link" href="${mapsUrl(d.x, d.y)}" target="_blank" rel="noopener">${esc(t('d_open_maps'))}</a></div></div>
+        <span class="row-km">${fmtKm(Number(d.km) || 0)}</span>
+        <div class="row-actions"><button type="button" class="btn ghost sm" data-edit-dist="${d.key}">${esc(t('p_edit'))}</button><button type="button" class="btn ghost sm danger" data-del-dist="${d.key}">${esc(t('p_delete'))}</button></div></li>`).join('')
+      : `<li class="empty-row">${esc(q ? t('search_none', { q }) : t('d_empty'))}</li>`;
+    const r = $('#rate');
+    if (document.activeElement !== r) r.value = nf2.format(Number(state.settings.rate) || 0);
+  }
+
+  /* ---------- page chrome ---------- */
+  function renderStatus() {
+    const el = $('#status'), tx = $('#statusText');
+    el.className = 'status is-' + mode;
+    tx.innerHTML = esc(t('st_' + mode)) + (loadNote ? ` <span class="note">${esc(t(loadNote))}</span>` : '');
+  }
+  function renderBanner() {
+    const has = COLS.slice(0, 3).some(c => Object.values(state[c]).some(d => d && d.example));
+    $('#exampleBanner').hidden = !has;
+  }
+  function render() {
+    renderStatus();
+    $('#monthLabel').textContent = cap(monthLabel(viewMonth));
+    renderBanner(); renderLogSearch(); renderRoute(); renderLedger(); renderPlaces(); renderDistances();
+  }
+  const TABS = { log: ['#tab-log', '#view-log'], places: ['#tab-places', '#view-places'], dist: ['#tab-dist', '#view-dist'] };
+  function switchTab(name) {
+    for (const [k, [tab, view]] of Object.entries(TABS)) {
+      $(tab).setAttribute('aria-selected', String(k === name));
+      $(view).hidden = k !== name;
+    }
+  }
+  const smooth = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+  /* ---------- export ---------- */
+  function exportRows() {
+    const m = monthData();
+    const rows = [[t('th_date'), t('th_start'), t('th_break'), t('th_end'), t('th_total'), t('th_route'), t('th_km')]];
+    for (const d of m.days) rows.push([fmtFullDate(d.date), d.start || '', fmtHM(Number(d.breakMin) || 0), d.end || '', fmtHM(d.work), (d.route || []).map(placeName).join(' → '), nf1.format(d.km) + (d.missing.length ? ' ' + t('x_missing') : '')]);
+    rows.push([]);
+    rows.push([t('x_month_total'), '', '', '', fmtHM(m.totalMin), '', nf1.format(m.totalKm)]);
+    rows.push([t('x_total_km'), nf1.format(m.totalKm)]);
+    rows.push([t('x_calc', { r: nf2.format(m.rate) }), eur.format(m.amount)]);
+    return rows;
+  }
+  const csvCell = v => /[;"\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+
+  /* ---------- events ---------- */
+  $('#langSelect').addEventListener('change', e => {
+    lang = LANGS[e.target.value] ? e.target.value : 'en';
+    try { localStorage.setItem(LS_LANG, lang); } catch (err) {}
+    applyStatic(); renderFormChrome(); GROUPS.forEach(g => renderPlaceFormChrome(g.key)); render();
+  });
+  for (const k of Object.keys(TABS)) $(TABS[k][0]).addEventListener('click', () => switchTab(k));
+  document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) switchTab(g.dataset.goto); });
+
+  $('#prevMonth').addEventListener('click', () => { viewMonth = shiftMonth(viewMonth, -1); if (!formDirty && !editingDate) resetForm(); render(); });
+  $('#nextMonth').addEventListener('click', () => { viewMonth = shiftMonth(viewMonth, 1); if (!formDirty && !editingDate) resetForm(); render(); });
+
+  // time steps switch
+  document.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+    const want15 = b.dataset.step === '15';
+    if (want15 === step15) return;
+    const vals = { start: getVal(T.start), brk: getVal(T.brk), end: getVal(T.end) };
+    step15 = want15;
+    try { localStorage.setItem(LS_STEP, step15 ? '15' : '1'); } catch (err) {}
+    setVal(T.start, vals.start); setVal(T.brk, vals.brk); setVal(T.end, vals.end);
+    applyStepMode(); updateFormTotal();
+  }));
+  for (const f of Object.values(T)) {
+    f.inp.addEventListener('input', () => { formDirty = true; updateFormTotal(); });
+    f.sel.addEventListener('change', () => { formDirty = true; updateFormTotal(); });
+  }
+  fDate.addEventListener('change', () => {
+    const v = fDate.value; formDirty = true;
+    if (v && state.days[v] && v !== editingDate) loadDay(v);
+  });
+
+  // searches
+  $('#logSearch').addEventListener('input', renderLogSearch);
+  $('#logSearchClear').addEventListener('click', () => { $('#logSearch').value = ''; renderLogSearch(); $('#logSearch').focus(); });
+  $('#distSearch').addEventListener('input', renderDistances);
+  $('#distSearchClear').addEventListener('click', () => { $('#distSearch').value = ''; renderDistances(); $('#distSearch').focus(); });
+  document.querySelectorAll('#distGroup [data-group]').forEach(b => b.addEventListener('click', () => { distGroup = b.dataset.group; renderDistances(); }));
+
+  $('#routeList').addEventListener('change', async e => {
+    const el = e.target;
+    if (el.matches('select[data-i]')) { formRoute[Number(el.dataset.i)] = el.value; formDirty = true; renderRoute(); return; }
+    if (el.matches('input[data-a]')) {
+      const km = parseNum(el.value);
+      if (el.value.trim() === '') return;
+      if (!isFinite(km) || km < 0) { toast(t('e_num'), 'error'); return; }
+      const a = el.dataset.a, b = el.dataset.b, [x, y] = [a, b].sort();
+      el.blur();
+      const ok = await put('distances', pairKey(a, b), { a: x, b: y, km: Math.round(km * 10) / 10 });
+      if (ok) toast(t('m_dist_saved_reuse', { a: placeName(a), b: placeName(b), km: fmtKm(km) }));
+      renderRoute();
+    }
+  });
+  $('#routeList').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.matches('input[data-a]')) { e.preventDefault(); e.target.blur(); }
+  });
+  $('#routeList').addEventListener('focusout', () => { setTimeout(() => { if (routeRenderPending) renderRoute(); }, 0); });
+  $('#routeList').addEventListener('click', e => {
+    const b = e.target.closest('[data-rm]'); if (!b) return;
+    formRoute.splice(Number(b.dataset.rm), 1); formDirty = true; renderRoute();
+  });
+  $('#addStop').addEventListener('change', e => {
+    if (!e.target.value) return;
+    formRoute.push(e.target.value); formDirty = true; renderRoute();
+  });
+  $('#addHome').addEventListener('click', () => { const h = homeId(); if (h) { formRoute.push(h); formDirty = true; renderRoute(); } });
+  $('#clearRoute').addEventListener('click', () => { formRoute = []; formDirty = true; renderRoute(); });
+
+  $('#dayForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const date = fDate.value, start = getVal(T.start), end = getVal(T.end);
+    if (!date || !start || !end) { toast(t('e_fill_times'), 'error'); return; }
+    if (state.days[date] && date !== editingDate) { loadDay(date); toast(t('e_day_exists', { day: fmtDay(date) }), 'error'); return; }
+    const breakMin = Math.max(0, parseInt(getVal(T.brk) || '0', 10) || 0);
+    const btn = $('#saveDay'); btn.disabled = true;
+    const moving = editingDate && editingDate !== date ? editingDate : null;
+    const ok = await put('days', date, { date, start, end, breakMin, route: formRoute.filter(Boolean) });
+    if (ok && moving) await remove('days', moving);
+    btn.disabled = false;
+    if (ok) {
+      toast(t('m_day_saved', { day: fmtDay(date), h: fmtHM(dayWork({ start, end, breakMin })), km: fmtKm(routeKm(formRoute).km) }));
+      viewMonth = date.slice(0, 7);
+      resetForm(addDays(date, 1));
+      render();
+    }
+  });
+  $('#cancelEdit').addEventListener('click', () => { resetForm(); });
+  $('#deleteDay').addEventListener('click', async e => {
+    if (!editingDate || !confirmStep(e.currentTarget, t('b_confirm_delete'))) return;
+    const d = editingDate;
+    const ok = await remove('days', d);
+    if (ok) { toast(t('m_day_deleted', { day: fmtDay(d) })); resetForm(); }
+  });
+
+  $('#ledgerBody').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-date]'); if (!tr) return;
+    loadDay(tr.dataset.date);
+    $('#dayForm').scrollIntoView({ behavior: smooth(), block: 'start' });
+  });
+
+  $('#copyBtn').addEventListener('click', () => {
+    const text = exportRows().map(r => r.join('\t')).join('\n');
+    const ta = $('#copyArea');
+    const fallback = () => { ta.hidden = false; ta.value = text; ta.focus(); ta.select(); toast(t('m_press_copy')); };
+    try {
+      navigator.clipboard.writeText(text).then(() => { ta.hidden = true; toast(t('m_copied')); }, fallback);
+    } catch (err) { fallback(); }
+  });
+  $('#csvBtn').addEventListener('click', () => {
+    const csv = '\uFEFF' + exportRows().map(r => r.map(csvCell).join(';')).join('\r\n');
+    saveFile(`work-mileage-${viewMonth}.csv`, csv, 'text/csv;charset=utf-8');
+    toast(t('m_csv_saved'));
+  });
+
+  // backup
+  $('#exportBtn').addEventListener('click', () => {
+    const data = { app: 'work-mileage-log', version: 1, exported: new Date().toISOString(), places: state.places, distances: state.distances, days: state.days, settings: state.settings };
+    saveFile(`work-mileage-log-backup-${todayIso}.json`, JSON.stringify(data, null, 2), 'application/json');
+    toast(t('m_exported'));
+  });
+  $('#importBtn').addEventListener('click', () => $('#importFile').click());
+  $('#importFile').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let data = null;
+    try { data = JSON.parse(await file.text()); } catch (err) { data = null; }
+    if (!isObj(data) || data.app !== 'work-mileage-log') { toast(t('e_import'), 'error'); return; }
+    const c = cleanImport(data);
+    state.places = { ...state.places, ...c.places };
+    state.distances = { ...state.distances, ...c.distances };
+    state.days = { ...state.days, ...c.days };
+    if (c.rate != null) state.settings = { ...state.settings, rate: c.rate };
+    persistLocal();
+    if (!formDirty && !editingDate) resetForm();
+    resetPlaceForms(); render();
+    toast(t('m_imported', { places: Object.keys(c.places).length, dist: Object.keys(c.distances).length, days: Object.keys(c.days).length }));
+  });
+
+  $('#removeExamples').addEventListener('click', async e => {
+    if (!confirmStep(e.currentTarget, t('ex_confirm'))) return;
+    const jobs = [];
+    for (const col of ['days', 'distances', 'places']) for (const [id, d] of Object.entries(state[col])) if (d && d.example) jobs.push([col, id]);
+    for (const [c, id] of jobs) { if (!(await remove(c, id))) return; }
+    resetForm(); resetPlaceForms(); render();
+    toast(t('m_examples_removed'));
+    if (!placeList().length) switchTab('places');
+  });
+
+  // home
+  $('#homeView').addEventListener('click', e => {
+    if (!e.target.closest('#editHome')) return;
+    const h = placeList().find(p => p.home);
+    $('#h-name').value = h?.name || t('h_badge'); $('#h-address').value = h?.address || '';
+    editingHome = true; renderHome(); $('#h-address').focus();
+  });
+  $('#cancelHome').addEventListener('click', () => { editingHome = false; renderHome(); });
+  $('#homeForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $('#h-name').value.trim() || t('h_badge'), address = $('#h-address').value.trim();
+    const h = placeList().find(p => p.home);
+    const id = h ? h.id : newId('p');
+    const prev = h ? state.places[id] : {};
+    const data = { ...prev, name, address, home: true, order: prev.order ?? 0 };
+    delete data.example;
+    editingHome = false;
+    if (!(await put('places', id, data))) return;
+    if (!editingDate && formRoute.length === 0) { formRoute = [id]; renderRoute(); }
+    toast(t('m_home_saved'));
+  });
+
+  // places: one form per list
+  for (const g of GROUPS) {
+    const k = g.key;
+    $(`#placeForm-${k}`).addEventListener('submit', async e => {
+      e.preventDefault();
+      const name = $(`#p-name-${k}`).value.trim();
+      if (!name) { toast(t('e_give_name'), 'error'); $(`#p-name-${k}`).focus(); return; }
+      const address = $(`#p-address-${k}`).value.trim();
+      const id = editingPlace[k] || newId('p');
+      const existing = state.places[id];
+      const order = existing?.order ?? (Object.values(state.places).reduce((mx, p) => Math.max(mx, p.order ?? 0), -1) + 1);
+      if (!(await put('places', id, { name, address, home: false, group: k, order }))) return;
+      toast(existing ? t('m_saved_name', { name }) : t('m_added_to', { name, group: g.title() }));
+      resetPlaceForm(k);
+    });
+    $(`#cancelPlace-${k}`).addEventListener('click', () => resetPlaceForm(k));
+    $(`#placeList-${k}`).addEventListener('click', async e => {
+      const ed = e.target.closest('[data-edit-place]'), del = e.target.closest('[data-del-place]');
+      if (ed) {
+        const p = state.places[ed.dataset.editPlace]; if (!p) return;
+        editingPlace[k] = ed.dataset.editPlace;
+        $(`#p-name-${k}`).value = p.name || ''; $(`#p-address-${k}`).value = p.address || '';
+        renderPlaceFormChrome(k);
+        $(`#placeForm-${k}`).scrollIntoView({ behavior: smooth(), block: 'center' }); $(`#p-name-${k}`).focus();
+      }
+      if (del) {
+        const id = del.dataset.delPlace, used = Number(del.dataset.used) || 0;
+        if (!confirmStep(del, used ? t('c_used_on', { n: used }) : t('c_click_again'))) return;
+        const name = placeName(id);
+        if (!(await remove('places', id))) return;
+        for (const [dk, d] of Object.entries(state.distances)) if (d.a === id || d.b === id) await remove('distances', dk);
+        if (editingPlace[k] === id) resetPlaceForm(k);
+        toast(t('m_deleted_name', { name }));
+      }
+    });
+  }
+
+  // distances
+  ['#d-from', '#d-to'].forEach(s => $(s).addEventListener('change', () => {
+    updateDistMaps();
+    const a = $('#d-from').value, b = $('#d-to').value;
+    if (a && b && a !== b) { const d = getDist(a, b); $('#d-km').value = d == null ? '' : nf1.format(d); }
+  }));
+  $('#distForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const a = $('#d-from').value, b = $('#d-to').value, km = parseNum($('#d-km').value);
+    if (!a || !b) { toast(t('e_choose_both'), 'error'); return; }
+    if (a === b) { toast(t('e_choose_diff'), 'error'); return; }
+    if (!isFinite(km) || km < 0) { toast(t('e_num'), 'error'); $('#d-km').focus(); return; }
+    const [x, y] = [a, b].sort();
+    if (await put('distances', pairKey(a, b), { a: x, b: y, km: Math.round(km * 10) / 10 })) { toast(t('m_dist_saved', { a: placeName(a), b: placeName(b), km: fmtKm(km) })); $('#d-km').value = ''; }
+  });
+  $('#distList').addEventListener('click', async e => {
+    const ed = e.target.closest('[data-edit-dist]'), del = e.target.closest('[data-del-dist]');
+    if (ed) {
+      const d = state.distances[ed.dataset.editDist]; if (!d) return;
+      $('#d-from').value = d.a; $('#d-to').value = d.b; $('#d-km').value = nf1.format(Number(d.km) || 0);
+      updateDistMaps(); $('#distFormCard').scrollIntoView({ behavior: smooth(), block: 'start' }); $('#d-km').focus(); $('#d-km').select();
+    }
+    if (del) {
+      if (!confirmStep(del, t('c_click_again'))) return;
+      const d = state.distances[del.dataset.delDist];
+      if (await remove('distances', del.dataset.delDist)) toast(t('m_deleted_name', { name: `${placeName(d?.a)} ↔ ${placeName(d?.b)}` }));
+    }
+  });
+
+  // rate
+  $('#rate').addEventListener('change', async e => {
+    const v = parseNum(e.target.value);
+    if (!isFinite(v) || v < 0) { toast(t('e_rate_num'), 'error'); e.target.value = nf2.format(Number(state.settings.rate) || 0); return; }
+    const rate = Math.round(v * 1000) / 1000;
+    if (await put('settings', 'main', { ...state.settings, rate })) toast(t('m_rate_set', { r: nf2.format(rate) }));
+  });
+
+  /* ---------- start ---------- */
+  function init() {
+    applyStatic(); applyStepMode();
+    mode = loadLocal() ? 'local' : 'memory';
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    resetForm(); resetPlaceForms(); render();
+    if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  init();
+})();
+</script>
+</body>
+</html>
